@@ -1,0 +1,22 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background-color: #212121;
+  overflow: hidden; /* 🚫 Prevent scrolling */
+  touch-action: none; /* 🚫 Prevent drag overscroll on mobile */
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+.app {
+  background-color: #212121;
+  display: flex;
+  width: 100%;
+  height: 100vh; /* Exactly full viewport height */
+  overflow: hidden;
+}
