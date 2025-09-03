@@ -1,0 +1,100 @@
+/* Container for all chat messages */
+.chatMessages {
+  padding: 1rem;
+  overflow-y: auto;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Individual chat message row */
+.chatRow {
+  display: flex;
+  margin-bottom: 0.75rem;
+  align-items: flex-end;
+}
+
+/* User messages align to the right */
+.user-row {
+  justify-content: flex-end;
+}
+
+/* Assistant messages align to the left */
+.assistant-row {
+  justify-content: flex-start;
+}
+
+/* Chat bubble styling */
+.chatBubble {
+  position: relative;
+  max-width: 70%;
+  padding: 0.75rem 1rem;
+  border-radius: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* User chat bubbles */
+.user-bubble {
+  background-color: #007bff; /* A clean blue */
+  color: white;
+  border-bottom-right-radius: 0.25rem;
+}
+
+/* Assistant chat bubbles */
+.assistant-bubble {
+  background-color: #e5e7eb; /* Light gray */
+  color: #333;
+  border-bottom-left-radius: 0.25rem;
+}
+
+/* Timestamps are now always visible */
+.timestamp {
+  font-size: 0.75rem;
+  opacity: 1; /* Timestamps are now always visible */
+  color: rgba(51, 51, 51, 0.7); /* Dark color for visibility in light mode */
+  align-self: flex-end;
+  margin-top: 0.25rem;
+}
+
+/* Timestamps in user bubbles should be white */
+.user-bubble .timestamp {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* In dark mode, assistant bubble timestamps should be light */
+.dark .assistant-bubble .timestamp {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Hide delete button by default */
+.delete-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  padding: 0.25rem;
+  font-size: 1rem;
+}
+
+/* Position delete button for user bubbles */
+.user-row .delete-btn {
+  left: -2.5rem;
+}
+
+/* Position delete button for assistant bubbles */
+.assistant-row .delete-btn {
+  right: -2.5rem;
+}
+
+/* Show delete button on hover of the chat row */
+.chatRow:hover .delete-btn {
+  opacity: 1;
+}
