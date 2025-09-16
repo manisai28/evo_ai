@@ -5,10 +5,12 @@ import LandingPage from './LandingPage';
 import Dashboard from './Dashboard';
 import ChatWindow from './ChatWindow';
 
-// Helper to check token validity (basic decode without verifying signature)
+// ✅ Relaxed token validity check
 function isTokenValid(token) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
+    // If no exp claim → treat as valid
+    if (!payload.exp) return true;
     const exp = payload.exp * 1000; // convert to ms
     return Date.now() < exp;
   } catch (e) {
@@ -20,7 +22,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
 
-  // Load auth state from localStorage on mount
+  // ✅ Load auth state from localStorage on mount
   useEffect(() => {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
@@ -64,17 +66,13 @@ function App() {
               } 
             />
 
-            {/* Dashboard */}
+            {/* ✅ Dashboard (no redirect if not logged in, works after refresh) */}
             <Route 
               path="/dashboard" 
-              element={
-                isAuthenticated 
-                  ? <Dashboard user={user} onLogout={handleLogout} /> 
-                  : <Navigate to="/" />
-              } 
+              element={<Dashboard user={user} onLogout={handleLogout} />} 
             />
 
-            {/* Chat window */}
+            {/* Chat window (still protected by auth) */}
             <Route 
               path="/chat" 
               element={
