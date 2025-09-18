@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+requests
+redis
+celery
+python-dotenv
+google-generativeai
+python-jose\[cryptography]
+sqlalchemy
+pydantic
+bson
