@@ -3,9 +3,13 @@ uvicorn
 requests
 redis
 celery
+motor
+pymongo
 python-dotenv
 google-generativeai
-python-jose\[cryptography]
+python-jose[cryptography]
+passlib
+protobuf
 sqlalchemy
 pydantic
 bson

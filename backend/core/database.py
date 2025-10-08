@@ -22,6 +22,7 @@ notes_collection = db["notes"]
 reminders_collection = db["reminders"]
 events_collection = db["events"]
 expenses_collection = db["expenses"]
+semantic_collection = db["semantic_memory"]
 
 # ==========================================================
 # --- Redis (Async) ---
