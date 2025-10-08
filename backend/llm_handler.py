@@ -11,10 +11,11 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
-def ask_gemini(prompt: str) -> str:
+# Async Gemini call
+async def ask_gemini(prompt: str) -> str:
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")  # fast & cheap
-        response = model.generate_content(prompt)
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")  # faster
+        response = await model.generate_content_async(prompt)
         return response.text or "⚠️ No response from Gemini"
     except Exception as e:
         return f"⚠️ Gemini API Error: {e}"

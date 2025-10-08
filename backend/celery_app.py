@@ -1,26 +1,47 @@
-# backend/celery_app.py
-import os
 from celery import Celery
+import os
 from dotenv import load_dotenv
 
-# Load .env file
 load_dotenv()
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
+# Redis as broker and backend
 celery_app = Celery(
-    "backend",  # 👈 better name than "tasks"
-    broker=REDIS_URL,
-    backend=REDIS_URL,
+    'ai_assistant',
+    broker=os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
+    backend=os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 )
 
-# Serialization settings
-celery_app.conf.task_serializer = "json"
-celery_app.conf.result_serializer = "json"
-celery_app.conf.accept_content = ["json"]
+# Celery configuration with updated settings
+celery_app.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
+    enable_utc=True,
+    task_track_started=True,
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
+    worker_disable_rate_limits=True,
+    
+    # Fix the deprecation warning
+    broker_connection_retry_on_startup=True,
+    
+    # Task routes
+    task_routes={
+        'backend.tasks.*': {'queue': 'ai_tasks'},
+    }
+)
 
-# 👇 Ensure Celery knows about your tasks
-celery_app.autodiscover_tasks(["backend.tasks"])
-
-# Or, alternatively:
-# import backend.tasks  # noqa: F401
+# Import all task modules
+celery_app.autodiscover_tasks([
+    'backend.tasks.calculator_tasks',
+    # 'backend.tasks.email_tasks',
+    'backend.tasks.event_tasks',
+    'backend.tasks.expense_tasks',
+    'backend.tasks.news_tasks',
+    'backend.tasks.notes_tasks',
+    'backend.tasks.reminder_tasks',
+    'backend.tasks.search_tasks',
+    'backend.tasks.translate_tasks',
+    'backend.tasks.weather_tasks',
+])
