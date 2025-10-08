@@ -1,7 +1,7 @@
 from datetime import datetime
 import re
-from backend.celery_app import celery_app
-from backend.database import get_user_reminders_sync, save_user_reminder_sync
+from backend.core.celery_app import celery_app
+from backend.core.database import get_user_reminders_sync, save_user_reminder_sync
 
 @celery_app.task
 def execute_reminder_task(task_args):

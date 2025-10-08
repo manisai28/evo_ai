@@ -1,8 +1,8 @@
 import datetime
 import json
-from backend.database import redis_client, users_collection, get_user_preferences
-from backend.llm_handler import ask_gemini
-from backend.task_utils import detect_task, run_task
+from backend.core.database import redis_client, users_collection, get_user_preferences
+from backend.llm.llm_handler import ask_gemini
+from backend.tasks.task_utils import detect_task, run_task
 
 
 class DialogueManager:

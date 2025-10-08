@@ -1,7 +1,7 @@
 from datetime import datetime
 import re
-from backend.celery_app import celery_app
-from backend.database import get_user_events_sync, save_user_event_sync
+from backend.core.celery_app import celery_app
+from backend.core.database import get_user_events_sync, save_user_event_sync
 
 
 @celery_app.task

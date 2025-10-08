@@ -1,6 +1,6 @@
 import re
 import math
-from backend.celery_app import celery_app
+from backend.core.celery_app import celery_app
 from datetime import datetime  # Add this import
 
 @celery_app.task

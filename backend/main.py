@@ -2,8 +2,8 @@ import json
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.dialogue_manager import DialogueManager
-from backend.schemas import DialogueRequest, DialogueResponse
+from backend.dialogue.dialogue_manager import DialogueManager
+from backend.models.schemas import DialogueRequest, DialogueResponse
 from backend import auth
 
 app = FastAPI()

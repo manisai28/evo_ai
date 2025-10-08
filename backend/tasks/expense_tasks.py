@@ -1,6 +1,6 @@
 from datetime import datetime
-from backend.celery_app import celery_app
-from backend.database import (
+from backend.core.celery_app import celery_app
+from backend.core.database import (
     get_user_expenses_sync,
     save_user_expense_sync,
     get_total_expenses_sync

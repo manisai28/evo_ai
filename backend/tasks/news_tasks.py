@@ -1,6 +1,6 @@
 import requests
 import os
-from backend.celery_app import celery_app
+from backend.core.celery_app import celery_app
 from dotenv import load_dotenv
 
 load_dotenv()

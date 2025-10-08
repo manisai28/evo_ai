@@ -1,6 +1,6 @@
 from datetime import datetime
-from backend.celery_app import celery_app
-from backend.database import get_user_notes_sync, save_user_note_sync
+from backend.core.celery_app import celery_app
+from backend.core.database import get_user_notes_sync, save_user_note_sync
 import re
 
 @celery_app.task

@@ -1,7 +1,7 @@
 import importlib
 import re
 from typing import Dict, Tuple, Any
-from backend.celery_app import celery_app
+from backend.core.celery_app import celery_app
 
 # Task mapping
 TASK_REGISTRY = {

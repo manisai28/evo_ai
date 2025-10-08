@@ -7,8 +7,8 @@ from bson import ObjectId
 import os
 from dotenv import load_dotenv
 
-from .database import users_collection
-from .schemas import UserCreate, UserLogin, UserResponse, Token   # ✅ fixed import
+from .core.database import users_collection
+from .models.schemas import UserCreate, UserLogin, UserResponse, Token   # ✅ fixed import
 
 load_dotenv()
 

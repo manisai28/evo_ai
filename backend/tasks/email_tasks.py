@@ -1,4 +1,4 @@
-from backend.celery_app import celery_app
+from backend.core.celery_app import celery_app
 
 @celery_app.task
 def execute_email_task(task_args):
