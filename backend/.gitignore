@@ -1,0 +1,28 @@
+# Virtual environments
+venv/
+backend/venv/
+.env
+__pycache__/
+*.pyc
+
+# Node.js
+node_modules/
+frontend-app/node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+# Virtual environments
+venv/
+backend/venv/
+.env
+__pycache__/
+*.pyc
+
+# Node.js
+node_modules/
+frontend-app/node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
