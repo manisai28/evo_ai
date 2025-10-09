@@ -44,13 +44,25 @@ class DialogueManager:
             task_type, task_args = detect_task(message)
             if task_type:
                 logger.info(f"Detected task: {task_type} for user={user_id}")
+
+                # Run the task (sync or async-safe)
                 task_result = await asyncio.get_event_loop().run_in_executor(
                     None, run_task, task_type, {**task_args, "user_id": user_id}
                 )
 
+                # ⚠️ Ensure task_result is not a coroutine
+                if asyncio.iscoroutine(task_result):
+                    task_result = await task_result
+
+                # Store user activity safely
                 await self.memory.append_user_activity(
                     user_id,
-                    {"type": "task", "task_name": task_type, "result": task_result, "timestamp": timestamp},
+                    {
+                        "type": "task",
+                        "task_name": task_type,
+                        "result": task_result,  # ✅ now safe
+                        "timestamp": timestamp,
+                    },
                 )
 
                 reply = (
@@ -160,7 +172,6 @@ class DialogueManager:
     def _extract_facts(self, text: str) -> List[Dict]:
         """Regex-based fact extraction for semantic memory."""
         facts = []
-
         fav_match = re.search(r"favorite (?:food|color|movie|hobby) is ([\w\s]+)", text, re.IGNORECASE)
         if fav_match:
             facts.append({

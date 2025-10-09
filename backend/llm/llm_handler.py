@@ -16,8 +16,8 @@ logger = get_logger(__name__)
 # =============================
 GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 # Correct Gemini API endpoints
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
-GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:streamGenerateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1:generateContent"
+GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1:streamGenerateContent"
 
 # Configure SDK properly
 if GEMINI_API_KEY:
@@ -30,7 +30,7 @@ if GEMINI_API_KEY:
 # =============================
 # Correct HTTP Implementation
 # =============================
-async def _call_gemini_http(messages: List[Dict[str, Any]], model: str = "gemini-pro") -> Dict[str, Any]:
+async def _call_gemini_http(messages: List[Dict[str, Any]], model: str = "gemini-1") -> Dict[str, Any]:
     """
     Correct HTTP implementation for Gemini API
     """

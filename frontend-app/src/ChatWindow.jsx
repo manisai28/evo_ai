@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Moon, Sun, Mic, MicOff, User, Search, Image, 
-  Paperclip, Send, ChevronDown, Settings, Upload, 
-  LogOut, Maximize, Minimize, X, Loader 
+import {
+  Moon, Sun, Mic, MicOff, User, Search, Image, Paperclip,
+  Send, ChevronDown, Settings, Upload, LogOut, Maximize,
+  Minimize, X, Loader
 } from 'lucide-react';
-import Dashboard from './Dashboard';
 import './ChatWindow.css';
 
-const ChatWindow = ({ user, onLogout }) => {
+const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(true);
   const [prompt, setPrompt] = useState("");
@@ -19,10 +18,14 @@ const ChatWindow = ({ user, onLogout }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [recognition, setRecognition] = useState(null);
   const [transcript, setTranscript] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
-  const ws = useRef(null); // WebSocket reference
+  const ws = useRef(null);
+  const messageQueue = useRef([]);
+  const isProcessing = useRef(false);
 
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [prevChats, setPrevChats] = useState([
     {
       role: "assistant",
@@ -31,78 +34,228 @@ const ChatWindow = ({ user, onLogout }) => {
     }
   ]);
 
-  // --- Initialize WebSocket connection ---
+  // Generate unique session ID
+  const generateSessionId = () => {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  // Save chats to localStorage and notify parent component
+  const saveChatSession = useCallback((sessionId, chats, isNewSession = false) => {
+    if (chats.length === 0) return;
+
+    const lastUserMessage = chats.filter(chat => chat.role === 'user').pop();
+    const chatTitle = lastUserMessage ? 
+      lastUserMessage.content.substring(0, 30) + (lastUserMessage.content.length > 30 ? '...' : '') : 
+      'New Chat';
+    
+    const chatSession = {
+      id: sessionId,
+      title: chatTitle,
+      messages: chats,
+      lastUpdated: new Date().toISOString(),
+      preview: lastUserMessage?.content || 'New conversation',
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      messageCount: chats.length
+    };
+    
+    const chatSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+    
+    if (isNewSession) {
+      chatSessions.unshift(chatSession);
+    } else {
+      const existingIndex = chatSessions.findIndex(session => session.id === sessionId);
+      if (existingIndex !== -1) {
+        chatSessions[existingIndex] = chatSession;
+      } else {
+        chatSessions.unshift(chatSession);
+      }
+    }
+    
+    const limitedSessions = chatSessions.slice(0, 50);
+    localStorage.setItem('chatSessions', JSON.stringify(limitedSessions));
+    
+    if (onChatUpdate) {
+      onChatUpdate(limitedSessions);
+    }
+
+    return limitedSessions;
+  }, [onChatUpdate]);
+
+  // Load chat sessions from localStorage
+  const loadChatSessions = useCallback(() => {
+    const savedSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+    
+    if (savedSessions.length === 0) {
+      const newSessionId = generateSessionId();
+      setCurrentSessionId(newSessionId);
+      const initialChats = [
+        {
+          role: "assistant",
+          content: "Hello! I'm your AI assistant. How can I help you today?",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        }
+      ];
+      saveChatSession(newSessionId, initialChats, true);
+      setPrevChats(initialChats);
+    } else {
+      const mostRecentSession = savedSessions[0];
+      setCurrentSessionId(mostRecentSession.id);
+      setPrevChats(mostRecentSession.messages || []);
+    }
+    
+    return savedSessions;
+  }, [saveChatSession]);
+
+  // SINGLE WebSocket connection - FIXED VERSION
   useEffect(() => {
+    // Only create WebSocket if it doesn't exist or is closed
+    if (ws.current && (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)) {
+      console.log("✅ WebSocket already exists, reusing connection");
+      return;
+    }
+
+    console.log("🔄 Creating WebSocket connection...");
     ws.current = new WebSocket("ws://localhost:8000/ws");
 
     ws.current.onopen = () => {
       console.log("✅ Connected to backend WebSocket");
+      setIsConnected(true);
+      
+      // Process any queued messages
+      if (messageQueue.current.length > 0) {
+        console.log(`📤 Processing ${messageQueue.current.length} queued messages`);
+        messageQueue.current.forEach(message => {
+          if (ws.current.readyState === WebSocket.OPEN) {
+            ws.current.send(JSON.stringify(message));
+          }
+        });
+        messageQueue.current = [];
+      }
     };
 
     ws.current.onmessage = (event) => {
-      const aiResponse = event.data;
-      const assistantMessage = {
-        role: "assistant",
-        content: aiResponse,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-      setPrevChats((prev) => [...prev, assistantMessage]);
+      console.log("📥 Received WebSocket message:", event.data);
+      
+      try {
+        let aiResponse;
+        // Try to parse as JSON first
+        try {
+          const response = JSON.parse(event.data);
+          aiResponse = response.response || response.message || response.text || event.data;
+        } catch {
+          // If parsing fails, use the raw data
+          aiResponse = event.data;
+        }
+
+        const assistantMessage = {
+          role: "assistant",
+          content: aiResponse,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        
+        setPrevChats((prev) => {
+          const newChats = [...prev, assistantMessage];
+          saveChatSession(currentSessionId, newChats, false);
+          return newChats;
+        });
+        
+      } catch (e) {
+        console.error("❌ Error processing WebSocket message:", e);
+        const assistantMessage = {
+          role: "assistant",
+          content: "I received your message! How can I help you?",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        setPrevChats((prev) => {
+          const newChats = [...prev, assistantMessage];
+          saveChatSession(currentSessionId, newChats, false);
+          return newChats;
+        });
+      }
+      
       setLoading(false);
+      isProcessing.current = false;
     };
 
     ws.current.onerror = (err) => {
       console.error("❌ WebSocket error:", err);
+      setIsConnected(false);
+      setLoading(false);
+      isProcessing.current = false;
     };
 
-    ws.current.onclose = () => {
-      console.log("⚠️ WebSocket closed");
+    ws.current.onclose = (event) => {
+      console.log("⚠️ WebSocket closed:", event.code, event.reason);
+      setIsConnected(false);
+      setLoading(false);
+      isProcessing.current = false;
+      
+      // Auto-reconnect after 3 seconds
+      setTimeout(() => {
+        if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
+          console.log("🔄 Attempting to reconnect WebSocket...");
+          setIsConnected(false);
+          // Force reconnection by updating state
+          setPrevChats(prev => [...prev]);
+        }
+      }, 3000);
     };
 
     return () => {
-      ws.current.close();
+      // Cleanup on component unmount
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.close();
+      }
     };
-  }, []);
+  }, [saveChatSession, currentSessionId]);
 
-  // --- Speech Recognition Setup ---
+  // Speech Recognition Setup
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      
-      recognition.onresult = (event) => {
-        const transcript = Array.from(event.results)
+      const recognitionInstance = new SpeechRecognition();
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = true;
+      recognitionInstance.lang = 'en-US';
+
+      recognitionInstance.onresult = (event) => {
+        const transcriptText = Array.from(event.results)
           .map(result => result[0])
           .map(result => result.transcript)
           .join('');
-        setTranscript(transcript);
+        setTranscript(transcriptText);
       };
-      
-      recognition.onend = () => {
+
+      recognitionInstance.onend = () => {
         if (transcript) {
           setPrompt(transcript);
           setTranscript("");
         }
         setIsRecording(false);
       };
-      
-      setRecognition(recognition);
+
+      recognitionInstance.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setIsRecording(false);
+      };
+
+      setRecognition(recognitionInstance);
     } else {
       console.warn("Speech recognition not supported in this browser");
     }
-  }, [transcript]);
+  }, []);
 
-  // --- Auto-scroll to bottom ---
+  // Load existing chats on component mount
+  useEffect(() => {
+    loadChatSessions();
+  }, [loadChatSessions]);
+
+  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [prevChats]);
 
-  // --- Dark Mode ---
+  // Dark Mode
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -111,7 +264,7 @@ const ChatWindow = ({ user, onLogout }) => {
     }
   }, [darkMode]);
 
-  // --- Fullscreen toggle ---
+  // Fullscreen toggle
   useEffect(() => {
     const handleFullScreenChange = () => {
       setIsFullScreen(!!document.fullscreenElement);
@@ -124,7 +277,7 @@ const ChatWindow = ({ user, onLogout }) => {
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
-      chatContainerRef.current.requestFullscreen().catch(err => {
+      chatContainerRef.current?.requestFullscreen?.().catch(err => {
         console.error(`Error attempting to enable full-screen mode: ${err.message}`);
       });
     } else {
@@ -135,6 +288,8 @@ const ChatWindow = ({ user, onLogout }) => {
   };
 
   const toggleRecording = () => {
+    if (!recognition) return;
+    
     if (isRecording) {
       recognition.stop();
     } else {
@@ -153,36 +308,120 @@ const ChatWindow = ({ user, onLogout }) => {
     navigate('/');
   };
 
-  // --- Send user message + get AI reply from backend ---
+  // Start a new chat session
+  const startNewChat = () => {
+    const newSessionId = generateSessionId();
+    const newChats = [
+      {
+        role: "assistant",
+        content: "Hello! I'm your AI assistant. How can I help you today?",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      }
+    ];
+    
+    setCurrentSessionId(newSessionId);
+    setPrevChats(newChats);
+    setPrompt("");
+    
+    saveChatSession(newSessionId, newChats, true);
+  };
+
+  // Load a specific chat session
+  const loadChatSession = (sessionId) => {
+    const chatSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+    const session = chatSessions.find(s => s.id === sessionId);
+    
+    if (session) {
+      setCurrentSessionId(sessionId);
+      setPrevChats(session.messages || []);
+      setIsHistoryOpen(false);
+    }
+  };
+
+  // Send user message + get AI reply - IMPROVED VERSION
   const getReply = useCallback(() => {
-    if (!prompt.trim() || loading) return;
+    if (!prompt.trim() || loading || isProcessing.current) return;
 
     const userMessage = {
       role: "user",
       content: prompt,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    setPrevChats((prev) => [...prev, userMessage]);
+    const newChats = [...prevChats, userMessage];
+    setPrevChats(newChats);
     setPrompt("");
     setLoading(true);
+    isProcessing.current = true;
+
+    saveChatSession(currentSessionId, newChats, false);
+
+    const messageData = {
+      text: prompt,
+      user_id: user?.id || "user123",
+      session_id: currentSessionId,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log("📤 Sending message to backend:", messageData);
 
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ text: userMessage.content }));
+      try {
+        ws.current.send(JSON.stringify(messageData));
+        console.log("✅ Message sent successfully via WebSocket");
+      } catch (error) {
+        console.error("❌ Error sending message:", error);
+        handleSendError();
+      }
     } else {
-      console.error("⚠️ WebSocket not connected");
-      setLoading(false);
+      console.log("⏳ WebSocket not ready, queuing message");
+      messageQueue.current.push(messageData);
+      
+      // Show waiting message
+      setTimeout(() => {
+        if (isProcessing.current) {
+          const waitingMessage = {
+            role: "assistant",
+            content: "🔄 Connecting to AI service... Please wait a moment",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          };
+          setPrevChats(prev => {
+            const updatedChats = [...prev, waitingMessage];
+            saveChatSession(currentSessionId, updatedChats, false);
+            return updatedChats;
+          });
+          setLoading(false);
+          isProcessing.current = false;
+        }
+      }, 2000);
     }
-  }, [prompt, loading]);
+  }, [prompt, loading, prevChats, saveChatSession, currentSessionId, user]);
+
+  const handleSendError = () => {
+    const errorMessage = {
+      role: "assistant",
+      content: "Sorry, I'm having trouble connecting to the AI service. Please check your connection and try again.",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setPrevChats(prev => {
+      const updatedChats = [...prev, errorMessage];
+      saveChatSession(currentSessionId, updatedChats, false);
+      return updatedChats;
+    });
+    setLoading(false);
+    isProcessing.current = false;
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       getReply();
     }
+  };
+
+  // Get all chat sessions for history dropdown
+  const getAllChatSessions = () => {
+    return JSON.parse(localStorage.getItem('chatSessions') || '[]');
   };
 
   return (
@@ -195,6 +434,22 @@ const ChatWindow = ({ user, onLogout }) => {
           <div className="logo">AI</div>
           <div className="app-name">AI Assistant</div>
         </div>
+        
+        <div className="header-actions">
+          <button 
+            className="icon-btn new-chat-btn"
+            onClick={startNewChat}
+            aria-label="Start new chat"
+          >
+            <span>+ New Chat</span>
+          </button>
+          
+          {/* Connection Status */}
+          <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+            {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+          </div>
+        </div>
+
         <div className="header-icons">
           <button 
             className="icon-btn" 
@@ -258,15 +513,20 @@ const ChatWindow = ({ user, onLogout }) => {
               </button>
             </div>
             <div className="history-list">
-              {prevChats.length === 0 ? (
+              {getAllChatSessions().length === 0 ? (
                 <div className="empty-history">No chat history yet</div>
               ) : (
-                prevChats.map((chat, index) => (
-                  <div key={index} className="history-item">
+                getAllChatSessions().map((session, index) => (
+                  <div 
+                    key={session.id} 
+                    className={`history-item ${session.id === currentSessionId ? 'active' : ''}`}
+                    onClick={() => loadChatSession(session.id)}
+                  >
                     <div className="history-content">
-                      <strong>{chat.role === "user" ? "You" : "AI"}:</strong> {chat.content}
+                      <strong>{session.title}</strong>
+                      <p className="history-preview">{session.preview}</p>
                     </div>
-                    <div className="history-time">{chat.timestamp}</div>
+                    <div className="history-time">{session.timestamp}</div>
                   </div>
                 ))
               )}
@@ -285,6 +545,7 @@ const ChatWindow = ({ user, onLogout }) => {
             <div className="message-time">{chat.timestamp}</div>
           </div>
         ))}
+        
         {loading && (
           <div className="message ai-message">
             <div className="message-content">
@@ -295,6 +556,7 @@ const ChatWindow = ({ user, onLogout }) => {
             </div>
           </div>
         )}
+        
         {isRecording && (
           <div className="message ai-message">
             <div className="message-content">
@@ -305,6 +567,7 @@ const ChatWindow = ({ user, onLogout }) => {
             </div>
           </div>
         )}
+        
         <div ref={messagesEndRef} />
       </div>
       
