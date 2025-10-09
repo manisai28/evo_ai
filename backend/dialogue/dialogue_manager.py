@@ -5,7 +5,9 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from backend.core.logger import get_logger
-from backend.llm.llm_handler import ask_gemini
+# from backend.llm.llm_handler import ask_gemini
+from backend.llm.fallback_handler import ask_with_fallback
+
 from backend.memory.memory_manager import MemoryManager
 from backend.tasks.task_utils import detect_task, run_task
 from backend.dialogue.personalization_engine import PersonalizationEngine
@@ -91,7 +93,9 @@ class DialogueManager:
 
         # Step 5: Ask Gemini for response
         try:
-            llm_response = await ask_gemini(messages_for_llm)  # removed user_id argument
+            # llm_response = await ask_gemini(messages_for_llm)  # removed user_id argument
+            llm_response = await ask_with_fallback(messages_for_llm, user_id=user_id)
+
             assistant_text = llm_response.get("text") if isinstance(llm_response, dict) else str(llm_response)
         except Exception as e:
             logger.exception("⚠️ Gemini API Error for user=%s: %s", user_id, str(e))

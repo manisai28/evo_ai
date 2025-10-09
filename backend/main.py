@@ -50,3 +50,5 @@ async def websocket_endpoint(ws: WebSocket):
 
         result = await dm.handle_message(user_id, msg)
         await ws.send_text(result["reply"])
+
+
