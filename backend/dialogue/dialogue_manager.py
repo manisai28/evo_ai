@@ -5,9 +5,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from backend.core.logger import get_logger
-# from backend.llm.llm_handler import ask_gemini
-from backend.llm.fallback_handler import ask_with_fallback
-
+from backend.llm.llm_handler import ask_gemini_with_context  # ✅ updated import
 from backend.memory.memory_manager import MemoryManager
 from backend.tasks.task_utils import detect_task, run_task
 from backend.dialogue.personalization_engine import PersonalizationEngine
@@ -52,7 +50,6 @@ class DialogueManager:
                     None, run_task, task_type, {**task_args, "user_id": user_id}
                 )
 
-                # ⚠️ Ensure task_result is not a coroutine
                 if asyncio.iscoroutine(task_result):
                     task_result = await task_result
 
@@ -62,7 +59,7 @@ class DialogueManager:
                     {
                         "type": "task",
                         "task_name": task_type,
-                        "result": task_result,  # ✅ now safe
+                        "result": task_result,
                         "timestamp": timestamp,
                     },
                 )
@@ -83,7 +80,7 @@ class DialogueManager:
 
         # Step 3: Retrieve memory & preferences
         short_context = await self.memory.get_session_conversation(user_id, session_key, limit=10)
-        long_context = await self.memory.get_long_term(user_id, limit=10)  # normal long-term
+        long_context = await self.memory.get_long_term(user_id, limit=10)
         semantic_context = await self.memory.retrieve_semantic_memory(user_id, message, top_k=5)
         user_profile = await self.personalization.get_profile(user_id)
 
@@ -91,15 +88,14 @@ class DialogueManager:
         system_prompt = self._build_system_prompt(user_profile)
         messages_for_llm = self._assemble_messages(system_prompt, long_context, short_context, semantic_context, message)
 
-        # Step 5: Ask Gemini for response
+        # Step 5: Ask Gemini for response (✅ updated)
         try:
-            # llm_response = await ask_gemini(messages_for_llm)  # removed user_id argument
-            llm_response = await ask_with_fallback(messages_for_llm, user_id=user_id)
-
-            assistant_text = llm_response.get("text") if isinstance(llm_response, dict) else str(llm_response)
+            response = await ask_gemini_with_context(messages_for_llm, user_id, session_key)  # ✅ CHANGED HERE
+            assistant_text = response.get("text") if isinstance(response, dict) else str(response)
         except Exception as e:
             logger.exception("⚠️ Gemini API Error for user=%s: %s", user_id, str(e))
             assistant_text = "⚠️ Sorry, Gemini is temporarily unavailable."
+            response = {}
 
         # Step 6: Personalize final output
         assistant_text = self.personalization.adapt_response(user_id, assistant_text)
@@ -119,7 +115,7 @@ class DialogueManager:
 
         return {
             "reply": assistant_text,
-            "metadata": {"task": False, "llm_meta": llm_response if isinstance(llm_response, dict) else {}},
+            "metadata": {"task": False, "llm_meta": response if isinstance(response, dict) else {}},
         }
 
     async def _append_conversation(self, user_id: str, session_key: str, role: str, text: str, ts: str):
@@ -143,20 +139,16 @@ class DialogueManager:
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
-        # Normal long-term memories
         for mem in long_context:
             summary = mem.get("summary") or mem.get("text") or str(mem)
             messages.append({"role": "assistant", "content": f"Memory: {summary}"})
 
-        # Semantic memory
         for sem in semantic_context:
             messages.append({"role": "assistant", "content": f"Relevant fact: {sem['summary']}"})
 
-        # Short-term conversation
         for turn in short_context:
             messages.append({"role": turn.get("role", "user"), "content": turn.get("text", "")})
 
-        # Current user message
         messages.append({"role": "user", "content": user_message})
 
         return messages

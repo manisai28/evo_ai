@@ -1,11 +1,12 @@
 from typing import Dict, Any
 from backend.core.database import users_collection
+from backend.memory.memory_manager import MemoryManager
 
 
 class PersonalizationEngine:
     """Manages user personalization, preferences, and adaptive responses."""
 
-    def __init__(self, memory_manager):
+    def __init__(self, memory_manager: MemoryManager):
         self.memory = memory_manager
         self.mongo = users_collection
 
@@ -14,7 +15,10 @@ class PersonalizationEngine:
         user = await self.mongo.find_one({"_id": user_id})
         if not user:
             return {"tone": "helpful", "formality": "neutral", "language": "en"}
-        return user.get("preferences", {"tone": "helpful", "formality": "neutral", "language": "en"})
+        return user.get(
+            "preferences",
+            {"tone": "helpful", "formality": "neutral", "language": "en"}
+        )
 
     def adapt_response(self, user_id: str, text: str) -> str:
         """Simple tone adaptation."""
@@ -29,3 +33,16 @@ class PersonalizationEngine:
             {"$push": {"interactions": {"user": user_msg, "assistant": bot_reply}}},
             upsert=True,
         )
+
+    # 🔹 NEW FUNCTION: Adaptive communication style
+    async def adapt_communication_style(self, user_id: str, message: str) -> Dict[str, Any]:
+        """Adapt response style dynamically based on user preferences in memory."""
+        preferences = await self.memory.get_preferences(user_id)
+
+        style_rules = {
+            "formality": "casual" if preferences.get("casual_tone") else "professional",
+            "humor_level": preferences.get("humor_level", "moderate"),
+            "detail_level": preferences.get("prefers_detail", "normal")
+        }
+
+        return style_rules
