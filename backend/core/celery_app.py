@@ -24,7 +24,7 @@ celery_app.conf.update(
     worker_disable_rate_limits=True,
     
     # Fix the deprecation warning
-    broker_connection_retry_on_startup=True,
+    broker_connection_retretry_on_startup=True,
     
     # Task routes
     task_routes={
@@ -40,7 +40,7 @@ celery_app.conf.update(
     }
 )
 
-# Import all task modules
+# Import all task modules - ADD MUSIC_TASKS HERE
 celery_app.autodiscover_tasks([
     'backend.tasks.calculator_tasks',
     'backend.tasks.event_tasks',
@@ -51,4 +51,6 @@ celery_app.autodiscover_tasks([
     'backend.tasks.search_tasks',
     'backend.tasks.translate_tasks',
     'backend.tasks.weather_tasks',
+    'backend.tasks.whatsapp_tasks',
+    'backend.tasks.music_tasks',  # ADD THIS LINE
 ])

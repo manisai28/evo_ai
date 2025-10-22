@@ -676,3 +676,64 @@
     transform: translateY(0); 
   }
 }
+
+/* WhatsApp Status Message Styles */
+.message.ai-message .message-content[style*="background"] {
+  border-left: 4px solid #2196f3;
+}
+
+/* Success messages (green) */
+.message.ai-message .message-content:contains("✅") {
+  background: #e8f5e8 !important;
+  border-left: 4px solid #4caf50 !important;
+  color: #2e7d32 !important;
+}
+
+/* Error messages (red) */
+.message.ai-message .message-content:contains("❌") {
+  background: #ffebee !important;
+  border-left: 4px solid #f44336 !important;
+  color: #c62828 !important;
+}
+
+/* Info messages (blue) */
+.message.ai-message .message-content:contains("⏳") {
+  background: #e3f2fd !important;
+  border-left: 4px solid #2196f3 !important;
+  color: #1565c0 !important;
+}
+
+/* WhatsApp icon styling */
+.message.ai-message .message-content:contains("📱") {
+  font-weight: 600;
+}
+
+/* YouTube embed styles */
+.youtube-embed {
+  margin: 10px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.youtube-embed iframe {
+  border-radius: 8px;
+}
+
+.music-message {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 15px;
+  border-radius: 12px;
+  margin: 10px 0;
+}
+
+.music-message a {
+  color: #ffeb3b;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.music-message a:hover {
+  text-decoration: underline;
+}

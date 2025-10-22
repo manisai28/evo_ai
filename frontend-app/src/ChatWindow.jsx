@@ -152,6 +152,45 @@ const checkForReminders = useCallback(async () => {
   }
 }, [user, currentSessionId, saveChatSession]);
 
+// In your message rendering, replace or modify the message content rendering:
+const renderMessageContent = (content) => {
+  // Check if message contains YouTube embed
+  if (content.includes('youtube.com/embed') || content.includes('youtu.be')) {
+    return (
+      <div 
+        className="music-message"
+        dangerouslySetInnerHTML={{ __html: content }} 
+      />
+    );
+  }
+  
+  // Check if message contains YouTube iframe
+  const iframeMatch = content.match(/<iframe[^>]*src="[^"]*youtube[^"]*"[^>]*><\/iframe>/);
+  if (iframeMatch) {
+    return (
+      <div 
+        className="youtube-embed"
+        dangerouslySetInnerHTML={{ __html: iframeMatch[0] }} 
+      />
+    );
+  }
+  
+  return content;
+};
+
+// Then in your message mapping:
+{prevChats.map((chat, index) => (
+  <div 
+    key={index} 
+    className={`message ${chat.role === 'assistant' ? 'ai-message' : 'user-message'}`}
+  >
+    <div className="message-content">
+      {renderMessageContent(chat.content)}
+    </div>
+    <div className="message-time">{chat.timestamp}</div>
+  </div>
+))}
+
   // SINGLE WebSocket connection - FIXED VERSION
   useEffect(() => {
     // Only create WebSocket if it doesn't exist or is closed

@@ -23,6 +23,7 @@ reminders_collection = db["reminders"]
 events_collection = db["events"]
 expenses_collection = db["expenses"]
 semantic_collection = db["semantic_memory"]
+whatsapp_tasks_collection = db["whatsapp_tasks"]
 
 # ==========================================================
 # --- Redis (Async) ---
@@ -158,7 +159,8 @@ sync_notes_collection = sync_db["notes"]
 sync_reminders_collection = sync_db["reminders"]
 sync_events_collection = sync_db["events"]
 sync_expenses_collection = sync_db["expenses"]
-
+sync_whatsapp_tasks_collection = sync_db["whatsapp_tasks"]
+sync_music_collection = sync_db["music_history"]
 # ==========================================================
 # --- Sync Helper Functions (for Celery Tasks) ---
 # ==========================================================
