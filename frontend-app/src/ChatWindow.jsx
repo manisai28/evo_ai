@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Moon, Sun, Mic, MicOff, User, Search, Image, Paperclip,
   Send, ChevronDown, Settings, Upload, LogOut, Maximize,
-  Minimize, X, Loader
+  Minimize, X, Loader, Volume2, VolumeX
 } from 'lucide-react';
 import './ChatWindow.css';
 
@@ -19,6 +19,8 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
   const [recognition, setRecognition] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [isConnected, setIsConnected] = useState(false);
+  const [isVoiceModeActive, setIsVoiceModeActive] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const ws = useRef(null);
@@ -107,89 +109,143 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
   }, [saveChatSession]);
 
   // Add this function to check for reminders
- // Add this function to check for reminders
-const checkForReminders = useCallback(async () => {
-  const userId = user?.id || "user123";
-  console.log("🔄 checkForReminders called for user:", userId);
-  
-  try {
-    console.log("🌐 Making API request...");
-    const response = await fetch(`http://localhost:8000/check-reminders/${userId}`);
-    console.log("📡 API Response status:", response.status);
+  const checkForReminders = useCallback(async () => {
+    const userId = user?.id || "user123";
+    console.log("🔄 checkForReminders called for user:", userId);
     
-    const data = await response.json();
-    console.log("📊 Reminder check response:", data);
-    
-    if (data.has_reminder) {
-      console.log("🔔 Found reminder:", data.message);
+    try {
+      console.log("🌐 Making API request...");
+      const response = await fetch(`http://localhost:8000/check-reminders/${userId}`);
+      console.log("📡 API Response status:", response.status);
       
-      // Add the reminder to chat messages
-      const reminderMessage = {
+      const data = await response.json();
+      console.log("📊 Reminder check response:", data);
+      
+      if (data.has_reminder) {
+        console.log("🔔 Found reminder:", data.message);
+        
+        // Add the reminder to chat messages
+        const reminderMessage = {
+          role: "assistant",
+          content: data.message,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        
+        console.log("💬 Adding reminder to chat...");
+        setPrevChats(prev => {
+          const newChats = [...prev, reminderMessage];
+          saveChatSession(currentSessionId, newChats, false);
+          return newChats;
+        });
+        
+        // Mark reminder as read in backend
+        console.log("📝 Marking reminder as read...");
+        await fetch(`http://localhost:8000/mark-reminder-read/${userId}`, {
+          method: 'POST'
+        });
+        
+        console.log("✅ Reminder displayed and marked as read");
+      } else {
+        console.log("ℹ️ No reminders found");
+      }
+    } catch (error) {
+      console.error('❌ Error checking reminders:', error);
+    }
+  }, [user, currentSessionId, saveChatSession]);
+
+  // VOICE MODE FUNCTION
+  const startVoiceMode = async () => {
+    if (voiceLoading) return;
+    
+    setVoiceLoading(true);
+    setIsVoiceModeActive(true);
+    
+    try {
+      // Add starting message to chat
+      const startingMessage = {
         role: "assistant",
-        content: data.message,
+        content: "🎤 Starting voice mode... Speak when you hear the prompt!",
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       
-      console.log("💬 Adding reminder to chat...");
       setPrevChats(prev => {
-        const newChats = [...prev, reminderMessage];
+        const newChats = [...prev, startingMessage];
         saveChatSession(currentSessionId, newChats, false);
         return newChats;
       });
-      
-      // Mark reminder as read in backend
-      console.log("📝 Marking reminder as read...");
-      await fetch(`http://localhost:8000/mark-reminder-read/${userId}`, {
-        method: 'POST'
+
+      // Call the voice endpoint
+      const response = await fetch('http://localhost:8000/voice/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
+
+      const result = await response.json();
       
-      console.log("✅ Reminder displayed and marked as read");
-    } else {
-      console.log("ℹ️ No reminders found");
+      if (result.status === 'success') {
+        // Add the voice response to chat
+        const voiceMessage = {
+          role: "assistant",
+          content: result.response,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        
+        setPrevChats(prev => {
+          const newChats = [...prev, voiceMessage];
+          saveChatSession(currentSessionId, newChats, false);
+          return newChats;
+        });
+      } else {
+        throw new Error(result.message);
+      }
+      
+    } catch (error) {
+      console.error('❌ Voice mode error:', error);
+      
+      const errorMessage = {
+        role: "assistant",
+        content: `❌ Voice mode failed: ${error.message}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      
+      setPrevChats(prev => {
+        const newChats = [...prev, errorMessage];
+        saveChatSession(currentSessionId, newChats, false);
+        return newChats;
+      });
+    } finally {
+      setVoiceLoading(false);
+      setIsVoiceModeActive(false);
     }
-  } catch (error) {
-    console.error('❌ Error checking reminders:', error);
-  }
-}, [user, currentSessionId, saveChatSession]);
+  };
 
-// In your message rendering, replace or modify the message content rendering:
-const renderMessageContent = (content) => {
-  // Check if message contains YouTube embed
-  if (content.includes('youtube.com/embed') || content.includes('youtu.be')) {
-    return (
-      <div 
-        className="music-message"
-        dangerouslySetInnerHTML={{ __html: content }} 
-      />
-    );
-  }
-  
-  // Check if message contains YouTube iframe
-  const iframeMatch = content.match(/<iframe[^>]*src="[^"]*youtube[^"]*"[^>]*><\/iframe>/);
-  if (iframeMatch) {
-    return (
-      <div 
-        className="youtube-embed"
-        dangerouslySetInnerHTML={{ __html: iframeMatch[0] }} 
-      />
-    );
-  }
-  
-  return content;
-};
-
-// Then in your message mapping:
-{prevChats.map((chat, index) => (
-  <div 
-    key={index} 
-    className={`message ${chat.role === 'assistant' ? 'ai-message' : 'user-message'}`}
-  >
-    <div className="message-content">
-      {renderMessageContent(chat.content)}
-    </div>
-    <div className="message-time">{chat.timestamp}</div>
-  </div>
-))}
+  // In your message rendering, replace or modify the message content rendering:
+  const renderMessageContent = (content) => {
+    // Check if message contains YouTube embed
+    if (content.includes('youtube.com/embed') || content.includes('youtu.be')) {
+      return (
+        <div 
+          className="music-message"
+          dangerouslySetInnerHTML={{ __html: content }} 
+        />
+      );
+    }
+    
+    // Check if message contains YouTube iframe
+    const iframeMatch = content.match(/<iframe[^>]*src="[^"]*youtube[^"]*"[^>]*><\/iframe>/);
+    if (iframeMatch) {
+      return (
+        <div 
+          className="youtube-embed"
+          dangerouslySetInnerHTML={{ __html: iframeMatch[0] }} 
+        />
+      );
+    }
+    
+    return content;
+  };
 
   // SINGLE WebSocket connection - FIXED VERSION
   useEffect(() => {
@@ -295,27 +351,27 @@ const renderMessageContent = (content) => {
   }, [saveChatSession, currentSessionId]);
 
   // Reminder polling effect - FIXED VERSION
-useEffect(() => {
-  console.log("🎯 POLLING EFFECT: Checking if user exists", user);
-  
-  const userId = user?.id || "user123";
-  console.log("⏰ Starting reminder polling for user:", userId);
-  
-  // Check immediately
-  console.log("🔄 Initial reminder check");
-  checkForReminders();
-  
-  // Check every 5 seconds (more frequent for testing)
-  const interval = setInterval(() => {
-    console.log("⏰ Polling interval triggered");
+  useEffect(() => {
+    console.log("🎯 POLLING EFFECT: Checking if user exists", user);
+    
+    const userId = user?.id || "user123";
+    console.log("⏰ Starting reminder polling for user:", userId);
+    
+    // Check immediately
+    console.log("🔄 Initial reminder check");
     checkForReminders();
-  }, 10000);
-  
-  return () => {
-    console.log("⏰ Stopping reminder polling");
-    clearInterval(interval);
-  };
-}, [user, checkForReminders]); // Include both dependencies
+    
+    // Check every 5 seconds (more frequent for testing)
+    const interval = setInterval(() => {
+      console.log("⏰ Polling interval triggered");
+      checkForReminders();
+    }, 10000);
+    
+    return () => {
+      console.log("⏰ Stopping reminder polling");
+      clearInterval(interval);
+    };
+  }, [user, checkForReminders]); // Include both dependencies
 
   // Speech Recognition Setup
   useEffect(() => {
@@ -552,6 +608,23 @@ useEffect(() => {
             <span>+ New Chat</span>
           </button>
           
+          {/* VOICE MODE BUTTON */}
+          <button 
+            className={`icon-btn voice-mode-btn ${isVoiceModeActive ? 'active' : ''}`}
+            onClick={startVoiceMode}
+            disabled={voiceLoading}
+            aria-label="Start voice mode"
+          >
+            {voiceLoading ? (
+              <Loader size={16} className="spin" />
+            ) : isVoiceModeActive ? (
+              <Volume2 size={16} />
+            ) : (
+              <VolumeX size={16} />
+            )}
+            <span>{voiceLoading ? 'Starting...' : 'Voice Mode'}</span>
+          </button>
+          
           {/* Connection Status */}
           <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
             {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
@@ -649,7 +722,7 @@ useEffect(() => {
             key={index} 
             className={`message ${chat.role === 'assistant' ? 'ai-message' : 'user-message'}`}
           >
-            <div className="message-content">{chat.content}</div>
+            <div className="message-content">{renderMessageContent(chat.content)}</div>
             <div className="message-time">{chat.timestamp}</div>
           </div>
         ))}
@@ -661,6 +734,14 @@ useEffect(() => {
             </div>
             <div className="message-time">
               {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </div>
+          </div>
+        )}
+        
+        {voiceLoading && (
+          <div className="message ai-message">
+            <div className="message-content">
+              <Loader size={16} className="thinking-animation" /> Starting voice mode...
             </div>
           </div>
         )}

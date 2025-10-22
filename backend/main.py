@@ -11,6 +11,7 @@ from fastapi import BackgroundTasks
 from datetime import datetime
 from backend.routes.whatsapp_routes import router as whatsapp_router
 from backend.routes.music_routes import router as music_router
+from backend.voice.voice_manager import VoiceManager
 
 # --- Initialize FastAPI ---
 app = FastAPI()
@@ -19,6 +20,7 @@ app = FastAPI()
 memory = MemoryManager()
 personalization = PersonalizationEngine(memory)
 dm = DialogueManager(memory, personalization)
+voice_manager = VoiceManager(dm)
 
 # --- Enable CORS ---
 app.add_middleware(
@@ -167,3 +169,19 @@ async def mark_reminder_read(user_id: str):
         print(f"✅ Marked reminder as read for user: {user_id}")
     return {"status": "marked_read"}
 
+@app.post("/voice/start")
+async def start_voice_mode():
+    """Start one-time voice interaction"""
+    try:
+        # Now this is properly async
+        result = await voice_manager.start_voice_interaction()
+        return {
+            "status": "success", 
+            "message": "Voice interaction completed",
+            "response": result
+        }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": f"Voice mode failed: {str(e)}"
+        }

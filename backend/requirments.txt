@@ -13,3 +13,4 @@ protobuf
 sqlalchemy
 pydantic
 bson
+pyttsx3 SpeechRecognition pyaudio
