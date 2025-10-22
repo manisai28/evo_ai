@@ -11,7 +11,7 @@ celery_app = Celery(
     backend=os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 )
 
-# Celery configuration with updated settings
+# Use JSON serialization (better compatibility)
 celery_app.conf.update(
     task_serializer='json',
     accept_content=['json'],
@@ -29,13 +29,20 @@ celery_app.conf.update(
     # Task routes
     task_routes={
         'backend.tasks.*': {'queue': 'ai_tasks'},
+    },
+    
+    # Beat schedule for periodic tasks (Backup System)
+    beat_schedule={
+        'check-missed-reminders-every-10-minutes': {
+            'task': 'backend.tasks.reminder_tasks.check_missed_reminders',
+            'schedule': 600.0,  # Every 10 minutes (600 seconds)
+        },
     }
 )
 
 # Import all task modules
 celery_app.autodiscover_tasks([
     'backend.tasks.calculator_tasks',
-    # 'backend.tasks.email_tasks',
     'backend.tasks.event_tasks',
     'backend.tasks.expense_tasks',
     'backend.tasks.news_tasks',

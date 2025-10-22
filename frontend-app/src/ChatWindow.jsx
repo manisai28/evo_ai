@@ -106,6 +106,52 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
     return savedSessions;
   }, [saveChatSession]);
 
+  // Add this function to check for reminders
+ // Add this function to check for reminders
+const checkForReminders = useCallback(async () => {
+  const userId = user?.id || "user123";
+  console.log("🔄 checkForReminders called for user:", userId);
+  
+  try {
+    console.log("🌐 Making API request...");
+    const response = await fetch(`http://localhost:8000/check-reminders/${userId}`);
+    console.log("📡 API Response status:", response.status);
+    
+    const data = await response.json();
+    console.log("📊 Reminder check response:", data);
+    
+    if (data.has_reminder) {
+      console.log("🔔 Found reminder:", data.message);
+      
+      // Add the reminder to chat messages
+      const reminderMessage = {
+        role: "assistant",
+        content: data.message,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      
+      console.log("💬 Adding reminder to chat...");
+      setPrevChats(prev => {
+        const newChats = [...prev, reminderMessage];
+        saveChatSession(currentSessionId, newChats, false);
+        return newChats;
+      });
+      
+      // Mark reminder as read in backend
+      console.log("📝 Marking reminder as read...");
+      await fetch(`http://localhost:8000/mark-reminder-read/${userId}`, {
+        method: 'POST'
+      });
+      
+      console.log("✅ Reminder displayed and marked as read");
+    } else {
+      console.log("ℹ️ No reminders found");
+    }
+  } catch (error) {
+    console.error('❌ Error checking reminders:', error);
+  }
+}, [user, currentSessionId, saveChatSession]);
+
   // SINGLE WebSocket connection - FIXED VERSION
   useEffect(() => {
     // Only create WebSocket if it doesn't exist or is closed
@@ -208,6 +254,29 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
       }
     };
   }, [saveChatSession, currentSessionId]);
+
+  // Reminder polling effect - FIXED VERSION
+useEffect(() => {
+  console.log("🎯 POLLING EFFECT: Checking if user exists", user);
+  
+  const userId = user?.id || "user123";
+  console.log("⏰ Starting reminder polling for user:", userId);
+  
+  // Check immediately
+  console.log("🔄 Initial reminder check");
+  checkForReminders();
+  
+  // Check every 5 seconds (more frequent for testing)
+  const interval = setInterval(() => {
+    console.log("⏰ Polling interval triggered");
+    checkForReminders();
+  }, 10000);
+  
+  return () => {
+    console.log("⏰ Stopping reminder polling");
+    clearInterval(interval);
+  };
+}, [user, checkForReminders]); // Include both dependencies
 
   // Speech Recognition Setup
   useEffect(() => {
@@ -432,7 +501,7 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
       <div className="header">
         <div className="logo-container" onClick={navigateToDashboard} style={{cursor: 'pointer'}}>
           <div className="logo">AI</div>
-          <div className="app-name">AI Assistant</div>
+          <div className="app-name">EVO AI</div>
         </div>
         
         <div className="header-actions">

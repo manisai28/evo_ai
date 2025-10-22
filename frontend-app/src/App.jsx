@@ -7,6 +7,7 @@ import ChatWindow from './ChatWindow';
 
 // ✅ Relaxed token validity check
 function isTokenValid(token) {
+  if (!token) return false;
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     // If no exp claim → treat as valid
@@ -21,6 +22,7 @@ function isTokenValid(token) {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // ✅ Load auth state from localStorage on mount
   useEffect(() => {
@@ -35,6 +37,7 @@ function App() {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
     }
+    setLoading(false);
   }, []);
 
   const handleLogin = (userData, token) => {
@@ -49,41 +52,57 @@ function App() {
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Force navigation to landing page
+    window.location.href = '/';
   };
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <MyProvider>
       <Router>
         <div className="App">
           <Routes>
-            {/* Landing page */}
+            {/* Landing page - always accessible */}
             <Route 
               path="/" 
               element={
-                isAuthenticated 
-                  ? <Navigate to="/dashboard" /> 
-                  : <LandingPage onLogin={handleLogin} />
+                !isAuthenticated 
+                  ? <LandingPage onLogin={handleLogin} /> 
+                  : <Navigate to="/dashboard" replace />
               } 
             />
 
-            {/* ✅ Dashboard (no redirect if not logged in, works after refresh) */}
+            {/* Protected Dashboard route */}
             <Route 
               path="/dashboard" 
-              element={<Dashboard user={user} onLogout={handleLogout} />} 
+              element={
+                isAuthenticated 
+                  ? <Dashboard user={user} onLogout={handleLogout} /> 
+                  : <Navigate to="/" replace />
+              } 
             />
 
-            {/* Chat window (still protected by auth) */}
+            {/* Protected Chat window */}
             <Route 
               path="/chat" 
               element={
                 isAuthenticated 
                   ? <ChatWindow user={user} onLogout={handleLogout} /> 
-                  : <Navigate to="/" />
+                  : <Navigate to="/" replace />
               } 
             />
 
-            {/* 404 page */}
-            <Route path="*" element={<h2>404 - Page Not Found</h2>} />
+            {/* Catch all route - redirect to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
       </Router>

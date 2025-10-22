@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from backend.core.logger import get_logger
-from backend.llm.llm_handler import ask_gemini_with_context  # ✅ updated import
+from backend.llm.llm_handler import ask_gemini_with_context
 from backend.memory.memory_manager import MemoryManager
 from backend.tasks.task_utils import detect_task, run_task
 from backend.dialogue.personalization_engine import PersonalizationEngine
@@ -45,35 +45,41 @@ class DialogueManager:
             if task_type:
                 logger.info(f"Detected task: {task_type} for user={user_id}")
 
-                # Run the task (sync or async-safe)
-                task_result = await asyncio.get_event_loop().run_in_executor(
-                    None, run_task, task_type, {**task_args, "user_id": user_id}
-                )
+                # Run the task with proper async handling and timeout
+                try:
+                    # Use asyncio.wait_for to set a reasonable timeout
+                    task_result = await asyncio.wait_for(
+                        self._execute_task_with_retry(task_type, {**task_args, "user_id": user_id}),
+                        timeout=30.0  # 30 second timeout instead of default
+                    )
+                    
+                    # Store user activity safely
+                    await self.memory.append_user_activity(
+                        user_id,
+                        {
+                            "type": "task",
+                            "task_name": task_type,
+                            "result": task_result,
+                            "timestamp": timestamp,
+                        },
+                    )
 
-                if asyncio.iscoroutine(task_result):
-                    task_result = await task_result
+                    reply = (
+                        task_result.get("reply")
+                        if isinstance(task_result, dict)
+                        else str(task_result) or f"Executed {task_type} task successfully."
+                    )
 
-                # Store user activity safely
-                await self.memory.append_user_activity(
-                    user_id,
-                    {
-                        "type": "task",
-                        "task_name": task_type,
-                        "result": task_result,
-                        "timestamp": timestamp,
-                    },
-                )
+                    await self._append_conversation(user_id, session_key, "assistant", reply, timestamp)
+                    await self.logger.log_interaction(user_id, message, reply, {"task_type": task_type})
 
-                reply = (
-                    task_result.get("reply")
-                    if isinstance(task_result, dict)
-                    else str(task_result) or f"Executed {task_type} task successfully."
-                )
+                    return {"reply": reply, "metadata": {"task": True, "task_name": task_type, "task_result": task_result}}
 
-                await self._append_conversation(user_id, session_key, "assistant", reply, timestamp)
-                await self.logger.log_interaction(user_id, message, reply, {"task_type": task_type})
-
-                return {"reply": reply, "metadata": {"task": True, "task_name": task_type, "task_result": task_result}}
+                except asyncio.TimeoutError:
+                    logger.error(f"Task {task_type} timed out for user={user_id}")
+                    timeout_reply = f"⏰ The {task_type} task is taking longer than expected. I'll notify you when it's complete."
+                    await self._append_conversation(user_id, session_key, "assistant", timeout_reply, timestamp)
+                    return {"reply": timeout_reply, "metadata": {"task": True, "task_name": task_type, "status": "timeout"}}
 
         except Exception as e:
             logger.exception("⚠️ Task execution failed for user=%s: %s", user_id, str(e))
@@ -88,9 +94,9 @@ class DialogueManager:
         system_prompt = self._build_system_prompt(user_profile)
         messages_for_llm = self._assemble_messages(system_prompt, long_context, short_context, semantic_context, message)
 
-        # Step 5: Ask Gemini for response (✅ updated)
+        # Step 5: Ask Gemini for response
         try:
-            response = await ask_gemini_with_context(messages_for_llm, user_id, session_key)  # ✅ CHANGED HERE
+            response = await ask_gemini_with_context(messages_for_llm, user_id, session_key)
             assistant_text = response.get("text") if isinstance(response, dict) else str(response)
         except Exception as e:
             logger.exception("⚠️ Gemini API Error for user=%s: %s", user_id, str(e))
@@ -117,6 +123,25 @@ class DialogueManager:
             "reply": assistant_text,
             "metadata": {"task": False, "llm_meta": response if isinstance(response, dict) else {}},
         }
+
+    async def _execute_task_with_retry(self, task_type: str, task_args: Dict[str, Any]) -> Any:
+        """Execute task with proper async handling and optional retry logic."""
+        try:
+            # Run the task in executor to avoid blocking the event loop
+            task_result = await asyncio.get_event_loop().run_in_executor(
+                None, run_task, task_type, task_args
+            )
+            
+            # Handle coroutine results
+            if asyncio.iscoroutine(task_result):
+                task_result = await task_result
+                
+            return task_result
+            
+        except Exception as e:
+            logger.error(f"Task execution failed for {task_type}: {e}")
+            # Optional: Add retry logic here if needed
+            raise e
 
     async def _append_conversation(self, user_id: str, session_key: str, role: str, text: str, ts: str):
         """Store conversation message in Redis (short-term)."""

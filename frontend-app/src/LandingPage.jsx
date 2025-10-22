@@ -33,7 +33,7 @@ const LandingPage = () => {
         <div className="nav-container">
           <div className="logo">
             <i className="fas fa-brain"></i>
-            <span>PersonalAI</span>
+            <span>EVOAI</span>
           </div>
           <div className="nav-actions">
             <button 

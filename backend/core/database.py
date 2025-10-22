@@ -59,21 +59,53 @@ async def save_user_note(user_id: str, content: str, timestamp=None):
     result = await notes_collection.insert_one(note)
     return result.inserted_id
 
-# --- Reminders ---
+# --- Reminders (Hybrid Approach) ---
 async def get_user_reminders(user_id: str, limit=10):
     cursor = reminders_collection.find({"user_id": user_id}).sort("created", -1).limit(limit)
     return await cursor.to_list(length=limit)
 
-async def save_user_reminder(user_id: str, text: str, time: str, created=None):
+async def save_user_reminder(user_id: str, text: str, time: str, scheduled_time=None, celery_task_id=None, created=None):
     from datetime import datetime
     reminder = {
         "user_id": user_id,
         "text": text,
-        "time": time,
+        "time": time,  # Original time string from user
+        "scheduled_time": scheduled_time or datetime.now(),  # Exact datetime for triggering
+        "celery_task_id": celery_task_id,  # Track Celery task ID
+        "is_triggered": False,
         "created": created or datetime.now()
     }
     result = await reminders_collection.insert_one(reminder)
-    return result.inserted_id
+    return str(result.inserted_id)
+
+async def delete_user_reminder(user_id: str, reminder_id: str):
+    from bson.objectid import ObjectId
+    result = await reminders_collection.delete_one({"user_id": user_id, "_id": ObjectId(reminder_id)})
+    return result.deleted_count > 0
+
+async def get_pending_reminders():
+    from datetime import datetime
+    cursor = reminders_collection.find({
+        "scheduled_time": {"$lte": datetime.now()},
+        "is_triggered": False
+    })
+    return await cursor.to_list(length=100)
+
+async def mark_reminder_triggered(reminder_id: str):
+    from bson.objectid import ObjectId
+    result = await reminders_collection.update_one(
+        {"_id": ObjectId(reminder_id)},
+        {"$set": {"is_triggered": True}}
+    )
+    return result.modified_count > 0
+
+async def update_reminder_celery_task(reminder_id: str, celery_task_id: str):
+    from bson.objectid import ObjectId
+    result = await reminders_collection.update_one(
+        {"_id": ObjectId(reminder_id)},
+        {"$set": {"celery_task_id": celery_task_id}}
+    )
+    return result.modified_count > 0
 
 # --- Events ---
 async def get_user_events(user_id: str, limit=10):
@@ -148,16 +180,24 @@ def get_user_reminders_sync(user_id: str, limit=10):
     cursor = sync_reminders_collection.find({"user_id": user_id}).sort("created", -1).limit(limit)
     return list(cursor)
 
-def save_user_reminder_sync(user_id: str, text: str, time: str, created=None):
+def save_user_reminder_sync(user_id: str, text: str, time: str, scheduled_time=None, celery_task_id=None, created=None):
     from datetime import datetime
     reminder = {
         "user_id": user_id,
         "text": text,
         "time": time,
+        "scheduled_time": scheduled_time or datetime.now(),
+        "celery_task_id": celery_task_id,
+        "is_triggered": False,
         "created": created or datetime.now()
     }
     result = sync_reminders_collection.insert_one(reminder)
     return str(result.inserted_id)
+
+def delete_user_reminder_sync(user_id: str, reminder_id: str):
+    from bson.objectid import ObjectId
+    result = sync_reminders_collection.delete_one({"user_id": user_id, "_id": ObjectId(reminder_id)})
+    return result.deleted_count > 0
 
 def get_user_events_sync(user_id: str, limit=10):
     cursor = sync_events_collection.find({"user_id": user_id}).sort("created", -1).limit(limit)
@@ -196,3 +236,47 @@ def get_total_expenses_sync(user_id: str):
     ]
     result = list(sync_expenses_collection.aggregate(pipeline))
     return result[0]["total"] if result else 0.0
+
+def get_pending_reminders_sync():
+    from datetime import datetime
+    cursor = sync_reminders_collection.find({
+        "scheduled_time": {"$lte": datetime.now()},
+        "is_triggered": False
+    })
+    return list(cursor)
+
+def mark_reminder_triggered_sync(reminder_id: str):
+    from bson.objectid import ObjectId
+    result = sync_reminders_collection.update_one(
+        {"_id": ObjectId(reminder_id)},
+        {"$set": {"is_triggered": True}}
+    )
+    return result.modified_count > 0
+
+def update_reminder_celery_task_sync(reminder_id: str, celery_task_id: str):
+    from bson.objectid import ObjectId
+    result = sync_reminders_collection.update_one(
+        {"_id": ObjectId(reminder_id)},
+        {"$set": {"celery_task_id": celery_task_id}}
+    )
+    return result.modified_count > 0
+
+def save_user_notification_sync(user_id: str, message: str, notification_type: str = "reminder"):
+    from datetime import datetime
+    notification = {
+        "user_id": user_id,
+        "message": message,
+        "type": notification_type,
+        "created": datetime.now(),
+        "is_read": False
+    }
+    # Use existing sync_reminders_collection (or create sync_notifications_collection if you prefer)
+    result = sync_reminders_collection.insert_one(notification)
+    return str(result.inserted_id)
+
+def get_user_notifications_sync(user_id: str, limit=10):
+    cursor = sync_reminders_collection.find({
+        "user_id": user_id,
+        "type": "reminder"
+    }).sort("created", -1).limit(limit)
+    return list(cursor)
