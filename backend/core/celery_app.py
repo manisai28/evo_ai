@@ -4,43 +4,47 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Redis as broker and backend
+print("🔍 DEBUG: Trying non-SSL connection...")
+
+redis_host = os.getenv('REDIS_HOST', 'localhost')
+redis_port = os.getenv('REDIS_PORT', '6379')
+redis_username = os.getenv('REDIS_USERNAME', '')
+redis_password = os.getenv('REDIS_PASSWORD', '')
+
+# Try without SSL first to test basic connectivity
+redis_url = f"redis://{redis_username}:{redis_password}@{redis_host}:{redis_port}/0"
+
+print(f"🔍 DEBUG: Non-SSL Redis URL = {redis_url.replace(redis_password, '***') if redis_password else redis_url}")
+
 celery_app = Celery(
     'ai_assistant',
-    broker=os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
-    backend=os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    broker=redis_url,
+    backend=redis_url
 )
 
-# Use JSON serialization (better compatibility)
+# Rest of your config...
 celery_app.conf.update(
+    broker_connection_retry_on_startup=True,
     task_serializer='json',
-    accept_content=['json'],
     result_serializer='json',
+    accept_content=['json'],
     timezone='UTC',
     enable_utc=True,
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     worker_disable_rate_limits=True,
-    
-    # Fix the deprecation warning
-    broker_connection_retretry_on_startup=True,
-    
-    # Task routes
     task_routes={
         'backend.tasks.*': {'queue': 'ai_tasks'},
     },
-    
-    # Beat schedule for periodic tasks (Backup System)
     beat_schedule={
         'check-missed-reminders-every-10-minutes': {
             'task': 'backend.tasks.reminder_tasks.check_missed_reminders',
-            'schedule': 600.0,  # Every 10 minutes (600 seconds)
+            'schedule': 600.0,
         },
     }
 )
 
-# Import all task modules - ADD MUSIC_TASKS HERE
 celery_app.autodiscover_tasks([
     'backend.tasks.calculator_tasks',
     'backend.tasks.event_tasks',
@@ -52,5 +56,7 @@ celery_app.autodiscover_tasks([
     'backend.tasks.translate_tasks',
     'backend.tasks.weather_tasks',
     'backend.tasks.whatsapp_tasks',
-    'backend.tasks.music_tasks',  # ADD THIS LINE
+    'backend.tasks.music_tasks',
 ])
+
+print("🔍 DEBUG: Non-SSL configuration complete")

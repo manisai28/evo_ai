@@ -115,7 +115,7 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
     
     try {
       console.log("🌐 Making API request...");
-      const response = await fetch(`http://localhost:8000/check-reminders/${userId}`);
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/check-reminders/${userId}`);
       console.log("📡 API Response status:", response.status);
       
       const data = await response.json();
@@ -139,10 +139,10 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
         });
         
         // Mark reminder as read in backend
-        console.log("📝 Marking reminder as read...");
-        await fetch(`http://localhost:8000/mark-reminder-read/${userId}`, {
-          method: 'POST'
-        });
+      console.log("📝 Marking reminder as read...");
+      await fetch(`${import.meta.env.VITE_API_BASE_URL}/mark-reminder-read/${userId}`, {
+      method: 'POST'
+      });
         
         console.log("✅ Reminder displayed and marked as read");
       } else {
@@ -175,13 +175,12 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
       });
 
       // Call the voice endpoint
-      const response = await fetch('http://localhost:8000/voice/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
+     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/voice/start`, {
+     method: 'POST',
+     headers: {
+      'Content-Type': 'application/json',
+     },
+   });
       const result = await response.json();
       
       if (result.status === 'success') {
@@ -256,7 +255,7 @@ const ChatWindow = ({ user, onLogout, onChatUpdate }) => {
     }
 
     console.log("🔄 Creating WebSocket connection...");
-    ws.current = new WebSocket("ws://localhost:8000/ws");
+    ws.current = new WebSocket(import.meta.env.VITE_WS_BASE_URL + "/ws");
 
     ws.current.onopen = () => {
       console.log("✅ Connected to backend WebSocket");

@@ -37,14 +37,14 @@ const AuthModal = ({ showAuthModal, closeAuthModal, activeTab: initialTab, onLog
     setMessage({ text: '', type: '' });
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          username: loginData.username, 
-          password: loginData.password 
-        }),
-      });
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      username: loginData.username, 
+      password: loginData.password 
+    }),
+  });
 
       if (!res.ok) {
         throw new Error("Invalid username or password");
@@ -79,16 +79,16 @@ const AuthModal = ({ showAuthModal, closeAuthModal, activeTab: initialTab, onLog
     setMessage({ text: '', type: '' });
 
     try {
-      // Adjust this endpoint and payload according to your registration API
-      const res = await fetch("http://127.0.0.1:8000/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          username: registerData.name,
-          email: registerData.email,
-          password: registerData.password
-        }),
-      });
+  // Adjust this endpoint and payload according to your registration API
+  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      username: registerData.name,
+      email: registerData.email,
+      password: registerData.password
+    }),
+  });
 
       if (!res.ok) {
         const errorData = await res.json();

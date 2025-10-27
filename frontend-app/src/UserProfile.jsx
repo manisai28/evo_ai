@@ -26,11 +26,11 @@ const UserProfile = ({ onClose }) => {
       return;
     }
     try {
-      const res = await axios.post('http://localhost:8000/api/users/save_email', {
-        user_id: user.user_id,
-        email: gmail,
-        app_password: appPassword,
-      });
+    const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/users/save_email`, {
+    user_id: user.user_id,
+    email: gmail,
+    app_password: appPassword,
+  });
       setMessage(res.data.message);
     } catch (error) {
       console.error(error);

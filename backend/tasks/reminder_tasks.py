@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
 import re
 from backend.core.celery_app import celery_app
+import requests
+import os
+from dotenv import load_dotenv
+
 from backend.core.database import (
     get_user_reminders_sync, 
     save_user_reminder_sync, 
@@ -105,10 +109,10 @@ def trigger_reminder(user_id, reminder_text, reminder_id):
         mark_reminder_triggered_sync(reminder_id)
         
         # Store reminder via HTTP endpoint (NOT DialogueManager)
-        import requests
+        load_dotenv()
         try:
             response = requests.post(
-                "http://localhost:8000/trigger-reminder",
+                f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/trigger-reminder",
                 json={
                     "user_id": user_id,
                     "reminder_text": reminder_text
