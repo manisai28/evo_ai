@@ -1,5 +1,4 @@
 import os
-import pywhatkit
 import time
 from celery import Celery
 from datetime import datetime, timedelta
@@ -7,13 +6,22 @@ from backend.core.database import sync_whatsapp_tasks_collection
 from backend.core.celery_app import celery_app
 from bson import ObjectId
 import requests
-import os
 from dotenv import load_dotenv
+
+# Twilio for WhatsApp API
+from twilio.rest import Client
+
+def get_twilio_client():
+    """Initialize Twilio client"""
+    load_dotenv()
+    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+    auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+    return Client(account_sid, auth_token)
 
 @celery_app.task
 def send_whatsapp_message(task_args):
     """
-    Send WhatsApp message using pywhatkit - NON-BLOCKING version
+    Send WhatsApp message using Twilio API - PROPER Docker-compatible version
     """
     try:
         print(f"📱 WHATSAPP TASK: Received task_args: {task_args}")
@@ -44,17 +52,14 @@ def send_whatsapp_message(task_args):
         result = sync_whatsapp_tasks_collection.insert_one(task_data)
         task_id = result.inserted_id
         
-        # Send immediate success status - assume it will work
-        send_status_update(user_id, f"✅ WhatsApp sent successfully to {to_number}", "success")
-        
-        # Return immediately and process in background
+        # Schedule the actual sending
         if delay_minutes == 0:
-            # Start background processing - returns immediately
+            # Send immediately
             process_whatsapp_message.delay(str(task_id), to_number, message, user_id)
-            return f"✅ WhatsApp sent successfully to {to_number}"
+            return f"✅ WhatsApp queued for {to_number}"
         else:
             # Schedule for later
-            send_whatsapp_delayed.apply_async(
+            process_whatsapp_message.apply_async(
                 args=[str(task_id), to_number, message, user_id],
                 countdown=delay_minutes * 60
             )
@@ -70,36 +75,48 @@ def send_whatsapp_message(task_args):
 @celery_app.task
 def process_whatsapp_message(task_id: str, to_number: str, message: str, user_id: str):
     """
-    Process WhatsApp message in background - SILENT version (no status updates)
+    Process WhatsApp message using Twilio API
     """
     try:
         print(f"📱 PROCESSING WHATSAPP to {to_number}")
         
-        # Update status to processing in database only (no frontend update)
+        # Update status to processing
         sync_whatsapp_tasks_collection.update_one(
             {'_id': ObjectId(task_id)},
             {'$set': {'status': 'processing', 'started_at': datetime.now()}}
         )
         
-        # Send message without any intermediate status updates
-        pywhatkit.sendwhatmsg_instantly(
-            phone_no=to_number,
-            message=message,
-            wait_time=10,
-            tab_close=False
+        # Send via Twilio WhatsApp API
+        client = get_twilio_client()
+        
+        # Format number for Twilio (ensure it includes country code without +)
+        formatted_number = to_number.replace('+', '')  # Twilio prefers no +
+        
+        # Send message via Twilio
+        twilio_message = client.messages.create(
+            body=message,
+            from_='whatsapp:+14155238886',  # Twilio sandbox number
+            to=f'whatsapp:{formatted_number}'
         )
         
-        # Update task status in database only
+        # Update task status to sent
         sync_whatsapp_tasks_collection.update_one(
             {'_id': ObjectId(task_id)},
-            {'$set': {'status': 'sent', 'sent_at': datetime.now()}}
+            {'$set': {
+                'status': 'sent', 
+                'sent_at': datetime.now(),
+                'message_sid': twilio_message.sid
+            }}
         )
         
-        print(f"✅ WhatsApp sent to {to_number}")
+        # Send success notification
+        send_status_update(user_id, f"✅ WhatsApp sent successfully to {to_number}", "success")
+        
+        print(f"✅ WhatsApp sent to {to_number}, SID: {twilio_message.sid}")
         return f"Message sent to {to_number}"
         
     except Exception as e:
-        # Only send error update if something actually fails
+        # Update task status to failed
         sync_whatsapp_tasks_collection.update_one(
             {'_id': ObjectId(task_id)},
             {'$set': {'status': 'failed', 'error': str(e), 'failed_at': datetime.now()}}
@@ -111,57 +128,14 @@ def process_whatsapp_message(task_id: str, to_number: str, message: str, user_id
         print(f"📱 {error_msg}")
         return error_msg
 
-@celery_app.task
-def send_whatsapp_delayed(task_id: str, to_number: str, message: str, user_id: str):
-    """
-    Send delayed WhatsApp message - SILENT version
-    """
-    try:
-        print(f"📱 SENDING DELAYED WHATSAPP to {to_number}")
-        
-        # Update status to processing in database only
-        sync_whatsapp_tasks_collection.update_one(
-            {'_id': ObjectId(task_id)},
-            {'$set': {'status': 'processing', 'started_at': datetime.now()}}
-        )
-        
-        pywhatkit.sendwhatmsg_instantly(
-            phone_no=to_number,
-            message=message,
-            wait_time=10,
-            tab_close=False
-        )
-        
-        # Update task status in database only
-        sync_whatsapp_tasks_collection.update_one(
-            {'_id': ObjectId(task_id)},
-            {'$set': {'status': 'sent', 'sent_at': datetime.now()}}
-        )
-        
-        print(f"✅ Delayed WhatsApp sent to {to_number}")
-        return f"Message sent to {to_number}"
-        
-    except Exception as e:
-        sync_whatsapp_tasks_collection.update_one(
-            {'_id': ObjectId(task_id)},
-            {'$set': {'status': 'failed', 'error': str(e), 'failed_at': datetime.now()}}
-        )
-        
-        error_msg = f"❌ Failed to send scheduled WhatsApp: {str(e)}"
-        send_status_update(user_id, error_msg, "error")
-        
-        print(f"📱 {error_msg}")
-        return error_msg
-
 def send_status_update(user_id: str, message: str, status_type: str):
     """
     Helper function to send status updates to frontend
     """
     try:
-        import requests
         load_dotenv()
         requests.post(
-             f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/send-whatsapp-status",
+            f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/api/send-whatsapp-status",
             json={
                 "user_id": user_id,
                 "message": message,

@@ -1,0 +1,57 @@
+# === Core Backend ===
+fastapi
+uvicorn
+pydantic
+websockets
+aiohttp
+httpx
+
+# === Databases & Memory ===
+redis
+pymongo
+motor
+neo4j
+
+# === Task Queue ===
+celery[redis]
+kombu
+billiard
+vine
+
+# === Google Gemini API ===
+google-generativeai
+
+# === YouTube Automation ===
+yt-dlp
+youtube-search-python
+ffmpeg-python
+
+# === WhatsApp - Twilio ===
+twilio
+
+# === Utilities & Logging ===
+requests
+python-dotenv
+click
+rich
+python-json-logger
+prometheus_client
+
+# === Optional for Text/Keyword Tasks ===
+nltk
+rake-nltk
+keybert
+beautifulsoup4
+langcodes
+
+# === Authentication ===
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+
+# === Voice/Speech ===
+pyttsx3
+speechrecognition
+
+# === Additional for Docker ===
+supervisor
